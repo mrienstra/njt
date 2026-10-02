@@ -240,6 +240,27 @@ document.querySelector("#reset-order").addEventListener("click", () => {
   void save({ order: [] });
 });
 
+document.querySelector("#reset-all").addEventListener("click", async () => {
+  const customCount = settings.customDestinations.length;
+  const confirmed = confirm(
+    [
+      "Reset all njt settings?",
+      customCount > 0
+        ? `This deletes ${customCount} custom destination${customCount === 1 ? "" : "s"}, restores the default order and shows all destinations again.`
+        : "This restores the default order and shows all destinations again.",
+      "This cannot be undone.",
+    ].join("\n\n"),
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  await chrome.storage.sync.clear();
+  settings = { hiddenKeywords: [], customDestinations: [], order: [] };
+  render();
+  showStatus("All settings have been reset");
+});
+
 document.querySelector("#fill-example").addEventListener("click", () => {
   addCustomForm.elements.keyword.value = "j";
   addCustomForm.elements.label.value = "jsdocs";

@@ -128,6 +128,9 @@
       #reset-order {
         margin-top: 12px;
       }
+      #reset-all {
+        color: var(--error);
+      }
       #status {
         min-height: 1.5em;
         margin-top: 8px;
@@ -196,6 +199,13 @@
       <button type="submit">Add</button>
     </form>
     <div id="status" role="status"></div>
+
+    <h2>Reset</h2>
+    <p>
+      Delete all custom destinations and go back to the default order, with
+      every destination suggested.
+    </p>
+    <button type="button" id="reset-all">Reset all settings…</button>
 
     <script src="options.js"></script>
   </body>
