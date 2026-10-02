@@ -47,18 +47,33 @@ export function generateZshCompletionScript() {
 # Enable it by adding this line to ~/.zshrc:
 #   eval "$(njt --completion zsh)"
 
+_njt_destinations() {
+  local -a lines destinations
+  # Calls njt itself (or whatever $words[1] is, e.g. a function wrapping it)
+  lines=("\${(@f)$("$words[1]" --complete-destination "$1" 2>/dev/null)}")
+  destinations=("\${(@)lines[2,-1]}")
+  if (( $#destinations )); then
+    _describe -t destinations "destination (none: $lines[1])" destinations
+  else
+    _message 'destination (could not load suggestions)'
+  fi
+}
+
 _njt() {
-  if (( CURRENT == 2 )); then
-    _message 'package name (or . for the nearest package.json)'
-  elif (( CURRENT == 3 )); then
-    local -a lines destinations
-    # Calls njt itself (or whatever $words[1] is, e.g. a function wrapping it)
-    lines=("\${(@f)$("$words[1]" --complete-destination "$words[2]" 2>/dev/null)}")
-    destinations=("\${(@)lines[2,-1]}")
-    if (( $#destinations )); then
-      _describe -t destinations "destination (none: $lines[1])" destinations
+  if (( CURRENT == 3 )); then
+    _njt_destinations "$words[2]"
+  elif (( CURRENT == 2 )); then
+    if [[ -z $PREFIX || -n $SUFFIX ]]; then
+      _message 'package name (or . for the nearest package.json)'
     else
-      _message 'destination (could not load suggestions)'
+      # \`njt prettier<Tab>\` acts like \`njt prettier <Tab>\`: the package name and
+      # a space become an already-typed prefix, followed by the destinations
+      local package=$PREFIX
+      IPREFIX+="$package "
+      PREFIX=
+      _njt_destinations "$package"
+      # zsh either inserts the space or lists matches; this makes it do both
+      compstate[list]='list force'
     fi
   fi
 }
