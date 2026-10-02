@@ -75,6 +75,30 @@
         color: var(--muted);
         font-size: 12px;
       }
+      .tag {
+        padding: 0 6px;
+        font-size: 12px;
+        color: var(--accent);
+        border: 1px solid currentColor;
+        border-radius: 999px;
+      }
+      .grip {
+        padding: 0 4px;
+        color: var(--muted);
+        background: none;
+        border: none;
+        cursor: grab;
+        letter-spacing: -3px;
+      }
+      li.dragging {
+        opacity: 0.4;
+      }
+      li.drop-before {
+        box-shadow: inset 0 2px 0 var(--accent);
+      }
+      li.drop-after {
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
       form {
         display: grid;
         grid-template-columns: 6em 10em 1fr auto;
@@ -118,21 +142,25 @@
       across browsers where you are signed in.
     </p>
 
-    <h2>Built-in destinations</h2>
+    <h2>Destinations</h2>
     <p>
-      Unchecked destinations are left out of suggestions, so others get their
-      spot. Typing them still works.
+      Suggestions follow this order; drag rows to rearrange them. Unchecked
+      destinations are left out, so others get their spot; typing them still
+      works.
     </p>
-    <ul id="built-ins">
+    <ul id="destinations">
       <li class="note">Loading…</li>
     </ul>
-
-    <h2>Custom destinations</h2>
     <p>
-      Jump to your own sites with <code>njt&nbsp;&lt;package&gt;&nbsp;&lt;keyword&gt;</code>.
-      <code>{package}</code> in the URL is replaced with the package name. They
-      are suggested before built-in ones, and replace a built-in destination
-      with the same keyword.
+      <button type="button" id="reset-order">Reset order</button>
+    </p>
+
+    <h2>Add a custom destination</h2>
+    <p>
+      Jump to your own sites with
+      <code>njt&nbsp;&lt;package&gt;&nbsp;&lt;keyword&gt;</code>.
+      <code>{package}</code> in the URL is replaced with the package name. A
+      custom destination replaces a built-in one with the same keyword.
     </p>
     <p>
       For example, keyword <code>j</code>, name <code>jsdocs</code> and URL
@@ -140,7 +168,6 @@
       <code>njt&nbsp;prettier&nbsp;j</code> open API docs on jsdocs.io.
       <button type="button" id="fill-example">Fill in this example</button>
     </p>
-    <ul id="customs"></ul>
     <form id="add-custom">
       <input
         name="keyword"

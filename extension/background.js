@@ -35,12 +35,34 @@ const moreSeparator = `${gap}🐸${gap}`;
  *   them still works)
  * - customDestinations: [{ keyword, label, urlTemplate }], resolved here
  *   rather than by njt.vercel.app, which must not redirect to arbitrary URLs
+ * - order: keywords in the order the user arranged them
  */
 async function getSettings() {
-  const { hiddenKeywords = [], customDestinations = [] } =
-    await chrome.storage.sync.get(["hiddenKeywords", "customDestinations"]);
+  const {
+    hiddenKeywords = [],
+    customDestinations = [],
+    order = [],
+  } = await chrome.storage.sync.get([
+    "hiddenKeywords",
+    "customDestinations",
+    "order",
+  ]);
 
-  return { hiddenKeywords, customDestinations };
+  return { hiddenKeywords, customDestinations, order };
+}
+
+// Keywords in `order` come first, the rest keep their default position
+// (custom destinations, then built-ins). Same as sortByOrder() in options.js
+function sortByOrder(items, order) {
+  const rank = (keyword, index) => {
+    const position = order.indexOf(keyword);
+    return position === -1 ? order.length + index : position;
+  };
+
+  return items
+    .map((item, index) => ({ item, rank: rank(item.keyword, index) }))
+    .toSorted((a, b) => a.rank - b.rank)
+    .map(({ item }) => item);
 }
 
 function parseInput(text) {
@@ -103,26 +125,30 @@ function buildSuggestions(
   const customKeywords = new Set(
     settings.customDestinations.map(({ keyword }) => keyword),
   );
-  const candidates = [
-    // Custom destinations come first: the user added them to see them
-    ...settings.customDestinations
-      .filter(
+  const candidates = sortByOrder(
+    [
+      ...settings.customDestinations
+        .filter(
+          ({ keyword }) =>
+            keyword.startsWith(destination) &&
+            keyword !== destination &&
+            !settings.hiddenKeywords.includes(keyword),
+        )
+        .map(({ keyword, label }) => ({
+          keyword,
+          completion: `${packageName} ${keyword}`,
+          description: label,
+          label,
+        })),
+      ...builtIns.filter(
         ({ keyword }) =>
-          keyword.startsWith(destination) && keyword !== destination,
-      )
-      .map(({ keyword, label }) => ({
-        keyword,
-        completion: `${packageName} ${keyword}`,
-        description: label,
-        label,
-      })),
-    ...builtIns.filter(
-      ({ keyword }) =>
-        !settings.hiddenKeywords.includes(keyword) &&
-        // A custom destination with the same keyword replaces the built-in one
-        !customKeywords.has(keyword),
-    ),
-  ];
+          !settings.hiddenKeywords.includes(keyword) &&
+          // A custom destination with the same keyword replaces the built-in one
+          !customKeywords.has(keyword),
+      ),
+    ],
+    settings.order,
+  );
 
   // In Firefox, the entered row takes one of the suggestion slots (see below)
   const shownCount = firefox ? maxSuggestionCount - 1 : maxSuggestionCount;
