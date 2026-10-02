@@ -248,7 +248,7 @@ document.querySelector("#reset-all").addEventListener("click", async () => {
       customCount > 0
         ? `This deletes ${customCount} custom destination${customCount === 1 ? "" : "s"}, restores the default order and shows all destinations again.`
         : "This restores the default order and shows all destinations again.",
-      "This cannot be undone.",
+      "This also applies to other browsers where you are signed in, and cannot be undone.",
     ].join("\n\n"),
   );
   if (!confirmed) {
