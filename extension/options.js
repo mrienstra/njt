@@ -18,18 +18,32 @@ async function save(changes) {
   render();
 }
 
+// Alphanumeric keywords sort before others (e.g. `.`), then alphabetically.
+// Built-in destinations follow this order by default
+function compareKeywords(a, b) {
+  const aIsAlphanumeric = /^[\da-z]/.test(a);
+  const bIsAlphanumeric = /^[\da-z]/.test(b);
+  if (aIsAlphanumeric !== bIsAlphanumeric) {
+    return aIsAlphanumeric ? -1 : 1;
+  }
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
+}
+
 // Same as sortByOrder() in background.js: keywords in `order` (arranged by
-// the user) come first, the rest keep their default position, so new custom
-// destinations end up at the bottom once the user has reordered the list
+// the user) come first, the rest keep their default position after them
 function sortByOrder(items, order) {
-  // Default positions: built-ins in their standard order, with each custom
-  // destination before the first keyword that sorts after it (j → before p)
+  // Default positions: built-ins in their standard (alphabetical) order, with
+  // each custom destination before the first keyword that sorts after it
   const defaultOrder = items.filter((item) => !item.custom);
   for (const custom of items
     .filter((item) => item.custom)
-    .toSorted((a, b) => (a.keyword < b.keyword ? -1 : 1))) {
+    .toSorted((a, b) => compareKeywords(a.keyword, b.keyword))) {
     const index = defaultOrder.findIndex(
-      (item) => item.keyword > custom.keyword,
+      (item) => compareKeywords(item.keyword, custom.keyword) > 0,
     );
     defaultOrder.splice(index === -1 ? defaultOrder.length : index, 0, custom);
   }
@@ -265,12 +279,21 @@ addCustomForm.addEventListener("submit", (event) => {
     return;
   }
 
+  // If the list is in alphabetical order, the new destination is slotted in
+  // (by going back to the default order). Otherwise, it is added at the bottom
+  const keywords = listEntries().map((entry) => entry.keyword);
+  const isAlphabetical = keywords.every(
+    (entryKeyword, index) =>
+      index === 0 || compareKeywords(keywords[index - 1], entryKeyword) < 0,
+  );
+
   addCustomForm.reset();
   void save({
     customDestinations: [
       ...settings.customDestinations,
       { keyword, label, urlTemplate },
     ],
+    ...(isAlphabetical ? { order: [] } : {}),
   });
 });
 
