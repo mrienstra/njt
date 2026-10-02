@@ -48,15 +48,29 @@ export function generateZshCompletionScript() {
 #   eval "$(njt --completion zsh)"
 
 _njt_destinations() {
-  local -a lines destinations
+  local -a lines keywords displays expl
+  local line keyword width=0
   # Calls njt itself (or whatever $words[1] is, e.g. a function wrapping it)
   lines=("\${(@f)$("$words[1]" --complete-destination "$1" 2>/dev/null)}")
-  destinations=("\${(@)lines[2,-1]}")
-  if (( $#destinations )); then
-    _describe -t destinations "destination (none: $lines[1])" destinations
-  else
+  for line in "\${(@)lines[2,-1]}"; do
+    keyword=\${line%%:*}
+    keywords+=("$keyword")
+    if (( $#keyword > width )); then
+      width=$#keyword
+    fi
+  done
+  if (( ! $#keywords )); then
     _message 'destination (could not load suggestions)'
+    return
   fi
+
+  # Unlike _describe, which puts each match on its own line, plain display
+  # strings let zsh use columns when the terminal is wide enough
+  for line in "\${(@)lines[2,-1]}"; do
+    displays+=("\${(r:width:)\${line%%:*}} -- \${line#*:}")
+  done
+  _description destinations expl "destination (none: $lines[1])"
+  compadd "\${(@)expl}" -d displays -- "\${(@)keywords}"
 }
 
 _njt() {
@@ -95,7 +109,7 @@ export async function printDestinationCompletions(packageName, log) {
     const [entered, ...destinations] = await fetchDestinations(packageName);
     log(entered?.description ?? "");
     for (const { keyword, description } of destinations) {
-      log(`${keyword.replaceAll(":", String.raw`\:`)}:${description}`);
+      log(`${keyword}:${description}`);
     }
   } catch {
     // Offline or timed out: no suggestions, the shell shows a message instead
