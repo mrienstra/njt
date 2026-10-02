@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>njt settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --text: #1f2328;
+        --muted: #59636e;
+        --background: #ffffff;
+        --border: #d1d9e0;
+        --accent: #1a7f37;
+        --error: #cf222e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #e6edf3;
+          --muted: #9198a1;
+          --background: #0d1117;
+          --border: #3d444d;
+          --accent: #3fb950;
+          --error: #f85149;
+        }
+      }
+      body {
+        margin: 0 auto;
+        max-width: 720px;
+        padding: 24px 16px 48px;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+        color: var(--text);
+        background: var(--background);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 4px;
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+      code,
+      kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .keyword {
+        min-width: 2.5em;
+        font-weight: 600;
+      }
+      .description {
+        flex: 1;
+        overflow-wrap: anywhere;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      form {
+        display: grid;
+        grid-template-columns: 6em 10em 1fr auto;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      @media (max-width: 560px) {
+        form {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      input[type="text"],
+      input[type="url"] {
+        min-width: 0;
+        padding: 4px 6px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      button {
+        font: inherit;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      #status {
+        min-height: 1.5em;
+        margin-top: 8px;
+        color: var(--accent);
+      }
+      #status.error {
+        color: var(--error);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>njt settings</h1>
+    <p>
+      Choose what <kbd>njt</kbd> suggests in the address bar. Settings sync
+      across browsers where you are signed in.
+    </p>
+
+    <h2>Built-in destinations</h2>
+    <p>
+      Unchecked destinations are left out of suggestions, so others get their
+      spot. Typing them still works.
+    </p>
+    <ul id="built-ins">
+      <li class="note">Loading…</li>
+    </ul>
+
+    <h2>Custom destinations</h2>
+    <p>
+      Jump to your own sites with <code>njt &lt;package&gt; &lt;keyword&gt;</code>.
+      <code>{package}</code> in the URL is replaced with the package name. They
+      are suggested before built-in ones, and replace a built-in destination
+      with the same keyword.
+    </p>
+    <ul id="customs"></ul>
+    <form id="add-custom">
+      <input
+        name="keyword"
+        type="text"
+        placeholder="keyword"
+        aria-label="Keyword"
+        required
+      />
+      <input
+        name="label"
+        type="text"
+        placeholder="name"
+        aria-label="Name"
+        required
+      />
+      <input
+        name="urlTemplate"
+        type="url"
+        placeholder="https://example.com/package/{package}"
+        aria-label="URL template"
+        required
+      />
+      <button type="submit">Add</button>
+    </form>
+    <div id="status" role="status"></div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
