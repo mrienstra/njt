@@ -33,11 +33,13 @@ export async function fetchDestinations(packageName) {
     `${baseUrl}/suggest?q=${encodeURIComponent(`${packageName} `)}`,
     { signal: AbortSignal.timeout(3000) },
   );
-  const [, completions, descriptions] = await response.json();
+  const [, completions, descriptions, , { "njt:labels": labels = [] } = {}] =
+    await response.json();
 
   return completions.map((completion, index) => ({
     keyword: completion.split(" ", 2)[1] ?? "",
     description: descriptions[index] ?? "",
+    label: labels[index] ?? "",
   }));
 }
 
@@ -48,13 +50,16 @@ export function generateZshCompletionScript() {
 #   eval "$(njt --completion zsh)"
 
 _njt_destinations() {
-  local -a lines keywords displays expl
-  local line keyword width=0
+  local -a lines keywords labels descriptions displays expl
+  local line rest keyword i width=0 fullWidth=0
   # Calls njt itself (or whatever $words[1] is, e.g. a function wrapping it)
   lines=("\${(@f)$("$words[1]" --complete-destination "$1" 2>/dev/null)}")
   for line in "\${(@)lines[2,-1]}"; do
     keyword=\${line%%:*}
+    rest=\${line#*:}
     keywords+=("$keyword")
+    labels+=("\${rest%%:*}")
+    descriptions+=("\${rest#*:}")
     if (( $#keyword > width )); then
       width=$#keyword
     fi
@@ -64,10 +69,20 @@ _njt_destinations() {
     return
   fi
 
+  # Full descriptions if two columns of them fit, short labels otherwise
+  for i in {1..$#keywords}; do
+    if (( width + 4 + $#descriptions[i] > fullWidth )); then
+      fullWidth=$(( width + 4 + $#descriptions[i] ))
+    fi
+  done
+  if (( 2 * (fullWidth + 2) > COLUMNS )); then
+    descriptions=("\${(@)labels}")
+  fi
+
   # Unlike _describe, which puts each match on its own line, plain display
   # strings let zsh use columns when the terminal is wide enough
-  for line in "\${(@)lines[2,-1]}"; do
-    displays+=("\${(r:width:)\${line%%:*}} -- \${line#*:}")
+  for i in {1..$#keywords}; do
+    displays+=("\${(r:width:)keywords[i]} -- $descriptions[i]")
   done
   _description destinations expl "destination (none: $lines[1])"
   compadd "\${(@)expl}" -d displays -- "\${(@)keywords}"
@@ -102,14 +117,14 @@ compdef _njt njt
 
 /**
  * Prints destinations in the format the zsh completion script expects: a
- * header line, then `keyword:description` lines
+ * header line, then `keyword:label:description` lines
  */
 export async function printDestinationCompletions(packageName, log) {
   try {
     const [entered, ...destinations] = await fetchDestinations(packageName);
     log(entered?.description ?? "");
-    for (const { keyword, description } of destinations) {
-      log(`${keyword}:${description}`);
+    for (const { keyword, label, description } of destinations) {
+      log(`${keyword}:${label}:${description}`);
     }
   } catch {
     // Offline or timed out: no suggestions, the shell shows a message instead
