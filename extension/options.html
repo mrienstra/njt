@@ -129,10 +129,16 @@
 
     <h2>Custom destinations</h2>
     <p>
-      Jump to your own sites with <code>njt &lt;package&gt; &lt;keyword&gt;</code>.
+      Jump to your own sites with <code>njt&nbsp;&lt;package&gt;&nbsp;&lt;keyword&gt;</code>.
       <code>{package}</code> in the URL is replaced with the package name. They
       are suggested before built-in ones, and replace a built-in destination
       with the same keyword.
+    </p>
+    <p>
+      For example, keyword <code>j</code>, name <code>jsdocs</code> and URL
+      <code>https://www.jsdocs.io/package/{package}</code> make
+      <code>njt&nbsp;prettier&nbsp;j</code> open API docs on jsdocs.io.
+      <button type="button" id="fill-example">Fill in this example</button>
     </p>
     <ul id="customs"></ul>
     <form id="add-custom">

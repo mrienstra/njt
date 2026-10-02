@@ -96,6 +96,15 @@ function render() {
   );
 }
 
+document.querySelector("#fill-example").addEventListener("click", () => {
+  addCustomForm.elements.keyword.value = "j";
+  addCustomForm.elements.label.value = "jsdocs";
+  addCustomForm.elements.urlTemplate.value =
+    "https://www.jsdocs.io/package/{package}";
+  showStatus("Example filled in: press Add to save it.");
+  addCustomForm.elements.keyword.focus();
+});
+
 addCustomForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const data = new FormData(addCustomForm);
