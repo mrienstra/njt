@@ -84,6 +84,13 @@ To reinstall or upgrade, run `npm install --global njt` again.
 
 **Pro tip 💡** When you specify `.` instead of a package name, `njt` takes the name from the nearest `package.json` file.
 
+**Pro tip 💡** In zsh, press Tab after a package name to list destinations, e.g. `njt prettier <Tab>`.
+To enable this, add the following line to `~/.zshrc`:
+
+```zsh
+eval "$(njt --completion zsh)"
+```
+
 **Pro tip 💡** To customise which browser you want to open, set an environment variable called `NJT_BROWSER` (or just `BROWSER`) with the app name of your choice.
 The value [may vary](https://www.npmjs.com/package/open#app) based on your OS.
 Note that setting `BROWSER` instead of `NJT_BROWSER` can affect other tools, which may or may not be desired.
