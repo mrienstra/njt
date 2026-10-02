@@ -18,15 +18,28 @@ async function save(changes) {
   render();
 }
 
-// Same as sortByOrder() in background.js: keywords in `order` come first,
-// the rest keep their default position (custom destinations, then built-ins)
+// Same as sortByOrder() in background.js: keywords in `order` (arranged by
+// the user) come first, the rest keep their default position, so new custom
+// destinations end up at the bottom once the user has reordered the list
 function sortByOrder(items, order) {
+  // Default positions: built-ins in their standard order, with each custom
+  // destination before the first keyword that sorts after it (j → before p)
+  const defaultOrder = items.filter((item) => !item.custom);
+  for (const custom of items
+    .filter((item) => item.custom)
+    .toSorted((a, b) => (a.keyword < b.keyword ? -1 : 1))) {
+    const index = defaultOrder.findIndex(
+      (item) => item.keyword > custom.keyword,
+    );
+    defaultOrder.splice(index === -1 ? defaultOrder.length : index, 0, custom);
+  }
+
   const rank = (keyword, index) => {
     const position = order.indexOf(keyword);
     return position === -1 ? order.length + index : position;
   };
 
-  return items
+  return defaultOrder
     .map((item, index) => ({ item, rank: rank(item.keyword, index) }))
     .toSorted((a, b) => a.rank - b.rank)
     .map(({ item }) => item);
@@ -178,7 +191,7 @@ function render() {
 
         if (custom) {
           item.append(
-            createButton("Delete custom", `Delete custom ${keyword}`, () => {
+            createButton("Delete", `Delete custom ${keyword}`, () => {
               void save({
                 customDestinations: settings.customDestinations.filter(
                   (customDestination) => customDestination.keyword !== keyword,
@@ -257,13 +270,6 @@ addCustomForm.addEventListener("submit", (event) => {
     customDestinations: [
       ...settings.customDestinations,
       { keyword, label, urlTemplate },
-    ],
-    // New destinations go to the top, so they are suggested right away
-    order: [
-      keyword,
-      ...listEntries()
-        .map((entry) => entry.keyword)
-        .filter((orderedKeyword) => orderedKeyword !== keyword),
     ],
   });
 });
