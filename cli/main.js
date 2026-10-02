@@ -69,14 +69,23 @@ _njt_destinations() {
     return
   fi
 
-  # Full descriptions if two columns of them fit, short labels otherwise
+  # Layout, based on the matches left after narrowing (e.g. \`p\` -> p, pp):
+  # 1. full descriptions in two columns, if they fit the width
+  # 2. full descriptions one per line, if they fit the height (and width)
+  # 3. short labels, in as many columns as fit
+  local matchCount=0
   for i in {1..$#keywords}; do
-    if (( width + 4 + $#descriptions[i] > fullWidth )); then
-      fullWidth=$(( width + 4 + $#descriptions[i] ))
+    if [[ $keywords[i] == $PREFIX* ]]; then
+      (( matchCount++ ))
+      if (( width + 4 + $#descriptions[i] > fullWidth )); then
+        fullWidth=$(( width + 4 + $#descriptions[i] ))
+      fi
     fi
   done
   if (( 2 * (fullWidth + 2) > COLUMNS )); then
-    descriptions=("\${(@)labels}")
+    if (( matchCount + 2 > LINES || fullWidth > COLUMNS )); then
+      descriptions=("\${(@)labels}")
+    fi
   fi
 
   # Unlike _describe, which puts each match on its own line, plain display
