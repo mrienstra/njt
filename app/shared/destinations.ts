@@ -103,6 +103,8 @@ function isGitLab(url: string) {
 }
 
 // When updating, remember to reflect changes in README.md, cli/cli.js and app/page/available-destinations.tsx
+// Keep keywords in alphabetical order, with non-alphanumeric ones (e.g. `.`) last:
+// the extension relies on it to slot custom destinations in
 const destinationConfigs: DestinationConfig[] = [
   {
     keywords: ["b"],
@@ -287,17 +289,17 @@ const destinationConfigs: DestinationConfig[] = [
     },
   },
   {
+    keywords: ["u"],
+    description: "package contents preview on unpkg.com",
+    label: "unpkg",
+    generateUrl: (packageName) => `https://unpkg.com/browse/${packageName}/`,
+  },
+  {
     keywords: ["v"],
     description: "list of package versions with dates on npmjs.com",
     label: "versions",
     generateUrl: (packageName) =>
       `https://npmjs.com/package/${packageName}?activeTab=versions`,
-  },
-  {
-    keywords: ["u"],
-    description: "package contents preview on unpkg.com",
-    label: "unpkg",
-    generateUrl: (packageName) => `https://unpkg.com/browse/${packageName}/`,
   },
   {
     keywords: ["x"],

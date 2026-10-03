@@ -29,6 +29,213 @@ chrome.omnibox.setDefaultSuggestion({ description: hint });
 const gap = "\u00A0".repeat(4);
 const moreSeparator = `${gap}🐸${gap}`;
 
+/**
+ * Preferences from the options page, synced across the user's browsers:
+ * - hiddenKeywords: built-in destinations left out of suggestions (typing
+ *   them still works)
+ * - customDestinations: [{ keyword, label, urlTemplate }], resolved here
+ *   rather than by njt.vercel.app, which must not redirect to arbitrary URLs
+ * - order: keywords in the order the user arranged them
+ */
+async function getSettings() {
+  const {
+    hiddenKeywords = [],
+    customDestinations = [],
+    order = [],
+  } = await chrome.storage.sync.get([
+    "hiddenKeywords",
+    "customDestinations",
+    "order",
+  ]);
+
+  return { hiddenKeywords, customDestinations, order };
+}
+
+// Alphanumeric keywords sort before others (e.g. `.`), then alphabetically.
+// Built-in destinations follow this order by default
+function compareKeywords(a, b) {
+  const aIsAlphanumeric = /^[\da-z]/.test(a);
+  const bIsAlphanumeric = /^[\da-z]/.test(b);
+  if (aIsAlphanumeric !== bIsAlphanumeric) {
+    return aIsAlphanumeric ? -1 : 1;
+  }
+  if (a === b) {
+    return 0;
+  }
+
+  return a < b ? -1 : 1;
+}
+
+// Keywords in `order` (arranged by the user) come first, the rest keep their
+// default position after them. Same as sortByOrder() in options.js
+function sortByOrder(items, order) {
+  // Default positions: built-ins in their standard (alphabetical) order, with
+  // each custom destination before the first keyword that sorts after it
+  const defaultOrder = items.filter((item) => !item.custom);
+  for (const custom of items
+    .filter((item) => item.custom)
+    .toSorted((a, b) => compareKeywords(a.keyword, b.keyword))) {
+    const index = defaultOrder.findIndex(
+      (item) => compareKeywords(item.keyword, custom.keyword) > 0,
+    );
+    defaultOrder.splice(index === -1 ? defaultOrder.length : index, 0, custom);
+  }
+
+  const rank = (keyword, index) => {
+    const position = order.indexOf(keyword);
+    return position === -1 ? order.length + index : position;
+  };
+
+  return defaultOrder
+    .map((item, index) => ({ item, rank: rank(item.keyword, index) }))
+    .toSorted((a, b) => a.rank - b.rank)
+    .map(({ item }) => item);
+}
+
+function parseInput(text) {
+  const [packageName = "", destination = ""] = text
+    .split(" ")
+    .filter((chunk) => chunk.length);
+
+  return { packageName, destination: destination.toLowerCase() };
+}
+
+function findCustomDestination(destination, { customDestinations }) {
+  return customDestinations.find(({ keyword }) => keyword === destination);
+}
+
+/** `/suggest` response → [{ keyword, completion, description, label }] */
+function parseSuggestResponse([
+  ,
+  completions = [],
+  descriptions = [],
+  ,
+  { "njt:labels": labels = [] } = {},
+]) {
+  return completions.map((completion, index) => ({
+    keyword: completion.split(" ", 2)[1] ?? "",
+    completion,
+    description: descriptions[index] ?? "",
+    label: labels[index] ?? "",
+  }));
+}
+
+/**
+ * Combines `/suggest` results with the user's settings into what the address
+ * bar shows: a description of what Enter does (incl. destinations that do not
+ * fit) and up to `maxSuggestionCount` rows. Pure, so it can be tested.
+ */
+function buildSuggestions(
+  text,
+  suggestResponse,
+  settings,
+  firefox = isFirefox,
+) {
+  const { packageName, destination } = parseInput(text);
+  if (!packageName) {
+    return undefined;
+  }
+
+  const [enteredFromServer, ...builtIns] =
+    parseSuggestResponse(suggestResponse);
+  // No response from /suggest (e.g. offline): Enter still goes to /jump
+  const entered = enteredFromServer ?? {
+    completion: [packageName, destination].filter(Boolean).join(" "),
+    description: "njt (suggestions unavailable)",
+  };
+
+  const enteredCustom = findCustomDestination(destination, settings);
+  const enteredRow = enteredCustom
+    ? {
+        completion: `${packageName} ${enteredCustom.keyword}`,
+        description: enteredCustom.label,
+      }
+    : entered;
+
+  const customKeywords = new Set(
+    settings.customDestinations.map(({ keyword }) => keyword),
+  );
+  const candidates = sortByOrder(
+    [
+      ...settings.customDestinations
+        .filter(
+          ({ keyword }) =>
+            keyword.startsWith(destination) &&
+            keyword !== destination &&
+            !settings.hiddenKeywords.includes(keyword),
+        )
+        .map(({ keyword, label }) => ({
+          keyword,
+          custom: true,
+          completion: `${packageName} ${keyword}`,
+          description: label,
+          label,
+        })),
+      ...builtIns.filter(
+        ({ keyword }) =>
+          !settings.hiddenKeywords.includes(keyword) &&
+          // A custom destination with the same keyword replaces the built-in one
+          !customKeywords.has(keyword),
+      ),
+    ],
+    settings.order,
+  );
+
+  // In Firefox, the entered row takes one of the suggestion slots (see below)
+  const shownCount = firefox ? maxSuggestionCount - 1 : maxSuggestionCount;
+  const shown = candidates.slice(0, shownCount);
+  const hidden = candidates.slice(shownCount);
+
+  // Labels go last: if the row gets cut off, the keywords are still visible
+  const hiddenLabels = hidden.map(({ label }) => label).filter(Boolean);
+  const defaultDescription = escapeDescription(
+    [
+      `${enteredRow.completion} → ${enteredRow.description}`,
+      ...(hidden.length > 0
+        ? [
+            `More: ${hidden.map(({ keyword }) => keyword).join(" ")}${
+              hiddenLabels.length > 0 ? ` (${hiddenLabels.join(", ")})` : ""
+            }`,
+          ]
+        : []),
+    ].join(moreSeparator),
+  );
+
+  return {
+    enteredCompletion: enteredRow.completion,
+    defaultDescription,
+    rows: shown.map(({ completion, description }) => ({
+      content: completion,
+      description: escapeDescription(`${completion} → ${description}`),
+    })),
+  };
+}
+
+/** Where entering the text goes: a custom destination or njt.vercel.app */
+function resolveUrl(text, settings) {
+  const { packageName, destination } = parseInput(text);
+  const custom = findCustomDestination(destination, settings);
+  // Only web pages, even if storage was changed by something other than the
+  // options page (which already checks this)
+  if (custom && packageName && /^https?:\/\//.test(custom.urlTemplate)) {
+    return custom.urlTemplate.replaceAll("{package}", packageName);
+  }
+
+  return `${baseUrl}/jump?from=extension%40${version}&to=${encodeURIComponent(
+    text,
+  )}`;
+}
+
+async function fetchSuggestResponse(text, signal) {
+  const response = await fetch(
+    `${baseUrl}/suggest?q=${encodeURIComponent(text)}`,
+    // Always revalidate, so a response cached before a deploy is not reused
+    { signal, cache: "no-cache" },
+  );
+
+  return await response.json();
+}
+
 let pendingRequest;
 
 chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
@@ -37,49 +244,22 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   pendingRequest = request;
 
   try {
-    const response = await fetch(
-      `${baseUrl}/suggest?q=${encodeURIComponent(text)}`,
-      // Always revalidate, so a response cached before a deploy is not reused
-      { signal: request.signal, cache: "no-cache" },
-    );
-    // The first completion is what entering the text does
-    const [
-      ,
-      [enteredCompletion, ...completions],
-      [enteredDescription, ...descriptions],
-      ,
-      { "njt:labels": [, ...labels] = [] } = {},
-    ] = await response.json();
-    if (enteredCompletion === undefined) {
+    const [suggestResponse, settings] = await Promise.all([
+      // Without /suggest, custom destinations can still be suggested
+      fetchSuggestResponse(text, request.signal).catch((error) => {
+        if (error?.name === "AbortError") {
+          throw error;
+        }
+        return [];
+      }),
+      getSettings(),
+    ]);
+    const suggestions = buildSuggestions(text, suggestResponse, settings);
+    if (!suggestions) {
       await chrome.omnibox.setDefaultSuggestion({ description: hint });
       suggest([]);
       return;
     }
-
-    // In Firefox, the entered row takes one of the suggestion slots (see below)
-    const shownCount = isFirefox ? maxSuggestionCount - 1 : maxSuggestionCount;
-    const hiddenKeywords = completions
-      .slice(shownCount)
-      .map((completion) => completion.slice(completion.lastIndexOf(" ") + 1));
-    // Labels go last: if the row gets cut off, the keywords are still visible
-    const hiddenLabels = labels.slice(shownCount).filter(Boolean);
-    const enteredRowDescription = escapeDescription(
-      [
-        `${enteredCompletion} → ${enteredDescription}`,
-        ...(hiddenKeywords.length > 0
-          ? [
-              `More: ${hiddenKeywords.join(" ")}${
-                hiddenLabels.length > 0 ? ` (${hiddenLabels.join(", ")})` : ""
-              }`,
-            ]
-          : []),
-      ].join(moreSeparator),
-    );
-
-    const rows = completions.slice(0, shownCount).map((completion, index) => ({
-      content: completion,
-      description: escapeDescription(`${completion} → ${descriptions[index]}`),
-    }));
 
     if (isFirefox) {
       // Firefox only applies a new default description on the next keystroke
@@ -88,17 +268,17 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
       // and does not affect /jump.
       suggest([
         {
-          content: `${enteredCompletion} `,
-          description: enteredRowDescription,
+          content: `${suggestions.enteredCompletion} `,
+          description: suggestions.defaultDescription,
         },
-        ...rows,
+        ...suggestions.rows,
       ]);
     } else {
       // Awaiting avoids a race where Chrome keeps the previous default description
       await chrome.omnibox.setDefaultSuggestion({
-        description: enteredRowDescription,
+        description: suggestions.defaultDescription,
       });
-      suggest(rows);
+      suggest(suggestions.rows);
     }
   } catch (error) {
     // A newer keystroke aborted this request and takes over from here
@@ -113,9 +293,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
 });
 
 chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
-  const url = `${baseUrl}/jump?from=extension%40${version}&to=${encodeURIComponent(
-    text,
-  )}`;
+  const url = resolveUrl(text, await getSettings());
 
   switch (disposition) {
     case "newForegroundTab": {
@@ -130,4 +308,24 @@ chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
       await chrome.tabs.update({ url });
     }
   }
+});
+
+// The options page asks for the built-in destinations, so that `baseUrl` only
+// lives in this file
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type !== "listDestinations") {
+    return false;
+  }
+
+  fetchSuggestResponse("package ")
+    .then((suggestResponse) => {
+      const [, ...builtIns] = parseSuggestResponse(suggestResponse);
+      sendResponse({ destinations: builtIns });
+    })
+    .catch(() => {
+      sendResponse({ destinations: [] });
+    });
+
+  // Keeps the channel open for the asynchronous response
+  return true;
 });

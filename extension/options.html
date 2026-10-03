@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>njt settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --text: #1f2328;
+        --muted: #59636e;
+        --background: #ffffff;
+        --border: #d1d9e0;
+        --accent: #1a7f37;
+        --error: #cf222e;
+        --link: #0969da;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #e6edf3;
+          --muted: #9198a1;
+          --background: #0d1117;
+          --border: #3d444d;
+          --accent: #3fb950;
+          --error: #f85149;
+          --link: #4493f8;
+        }
+      }
+      body {
+        margin: 0 auto;
+        max-width: 720px;
+        padding: 24px 16px 48px;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+        color: var(--text);
+        background: var(--background);
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 32px 0 4px;
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+      code,
+      kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .keyword {
+        min-width: 2.5em;
+        font-weight: 600;
+      }
+      .description {
+        flex: 1;
+        overflow-wrap: anywhere;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .tag {
+        padding: 0 6px;
+        font-size: 12px;
+        color: var(--accent);
+        border: 1px solid currentColor;
+        border-radius: 999px;
+      }
+      .grip {
+        padding: 0 4px;
+        color: var(--muted);
+        background: none;
+        border: none;
+        cursor: grab;
+        letter-spacing: -3px;
+      }
+      li.dragging {
+        opacity: 0.4;
+      }
+      li.drop-before {
+        box-shadow: inset 0 2px 0 var(--accent);
+      }
+      li.drop-after {
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+      form {
+        display: grid;
+        grid-template-columns: 6em 10em 1fr auto;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      @media (max-width: 560px) {
+        form {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      input[type="text"],
+      input[type="url"] {
+        min-width: 0;
+        padding: 4px 6px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+      }
+      button {
+        font: inherit;
+        padding: 0 10px;
+        cursor: pointer;
+      }
+      #reset-order {
+        margin-top: 12px;
+      }
+      /* Reads as part of the sentence around it rather than a prominent button */
+      #fill-example {
+        padding: 0;
+        color: var(--link);
+        background: none;
+        border: none;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      #reset-all {
+        color: var(--error);
+      }
+      #status {
+        min-height: 1.5em;
+        margin-top: 8px;
+        color: var(--accent);
+      }
+      #status.error {
+        color: var(--error);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>njt settings</h1>
+    <p>
+      Choose what <kbd>njt</kbd> suggests in the address bar. Settings sync
+      across browsers where you are signed in.
+    </p>
+
+    <h2>Destinations</h2>
+    <p>
+      Suggestions follow this order; drag rows to rearrange them. Unchecked
+      destinations are left out, so others get their spot; typing them still
+      works.
+    </p>
+    <ul id="destinations">
+      <li class="note">Loading…</li>
+    </ul>
+    <p>
+      <button type="button" id="reset-order">Reset order</button>
+    </p>
+
+    <h2>Add a custom destination</h2>
+    <p>
+      Jump to your own sites with
+      <code>njt&nbsp;&lt;package&gt;&nbsp;&lt;keyword&gt;</code>.
+      <code>{package}</code> in the URL is replaced with the package name. A
+      custom destination replaces a built-in one with the same keyword.
+    </p>
+    <p>
+      For example, keyword <code>j</code>, name <code>jsdocs</code> and URL
+      <code>https://www.jsdocs.io/package/{package}</code> make
+      <code>njt&nbsp;prettier&nbsp;j</code> open API docs on jsdocs.io.
+      <button type="button" id="fill-example">Fill in this example</button>
+    </p>
+    <form id="add-custom">
+      <input
+        name="keyword"
+        type="text"
+        placeholder="keyword"
+        aria-label="Keyword"
+        required
+      />
+      <input
+        name="label"
+        type="text"
+        placeholder="name"
+        aria-label="Name"
+        required
+      />
+      <input
+        name="urlTemplate"
+        type="url"
+        placeholder="https://example.com/package/{package}"
+        aria-label="URL template"
+        required
+      />
+      <button type="submit">Add</button>
+    </form>
+    <div id="status" role="status"></div>
+
+    <h2>Reset</h2>
+    <p>
+      Delete all custom destinations and go back to the default order, with
+      every destination suggested. Synced settings are reset in your other
+      browsers too.
+    </p>
+    <button type="button" id="reset-all">Reset all settings…</button>
+
+    <script src="options.js"></script>
+  </body>
+</html>
