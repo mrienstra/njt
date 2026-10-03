@@ -11,11 +11,37 @@ function showStatus(message, { error = false } = {}) {
   status.classList.toggle("error", error);
 }
 
+async function loadSettings() {
+  const stored = await chrome.storage.sync.get([
+    "hiddenKeywords",
+    "customDestinations",
+    "order",
+  ]);
+
+  return {
+    hiddenKeywords: stored.hiddenKeywords ?? [],
+    customDestinations: stored.customDestinations ?? [],
+    order: stored.order ?? [],
+  };
+}
+
+/** Returns whether the changes were saved */
 async function save(changes) {
+  try {
+    await chrome.storage.sync.set(changes);
+  } catch (error) {
+    // E.g. storage.sync quotas: 8 KB per setting, 120 writes per minute.
+    // Show what is actually stored, which is what suggestions use
+    settings = await loadSettings();
+    render();
+    showStatus(`Could not save: ${error.message}`, { error: true });
+    return false;
+  }
+
   settings = { ...settings, ...changes };
-  await chrome.storage.sync.set(changes);
-  showStatus("Saved");
   render();
+  showStatus("Saved");
+  return true;
 }
 
 // Alphanumeric keywords sort before others (e.g. `.`), then alphabetically.
@@ -115,9 +141,8 @@ function render() {
     const order = [...keywords];
     const [keyword] = order.splice(fromIndex, 1);
     order.splice(toIndex, 0, keyword);
-    await save({ order });
 
-    return true;
+    return await save({ order });
   }
 
   // Index of the row being dragged, so drop targets know what moves where
@@ -270,7 +295,7 @@ document.querySelector("#fill-example").addEventListener("click", () => {
   addCustomForm.elements.keyword.focus();
 });
 
-addCustomForm.addEventListener("submit", (event) => {
+addCustomForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = new FormData(addCustomForm);
   const keyword = String(data.get("keyword")).trim().toLowerCase();
@@ -292,6 +317,12 @@ addCustomForm.addEventListener("submit", (event) => {
     });
     return;
   }
+  if (urlTemplate.length > 2000) {
+    showStatus("The URL is too long (at most 2000 characters).", {
+      error: true,
+    });
+    return;
+  }
   if (!/^https?:\/\//.test(urlTemplate) || !urlTemplate.includes("{package}")) {
     showStatus(
       "The URL needs to start with https:// (or http://) and contain {package}.",
@@ -302,32 +333,36 @@ addCustomForm.addEventListener("submit", (event) => {
 
   // If the list is in alphabetical order, the new destination is slotted in
   // (by going back to the default order). Otherwise, it is added at the bottom
-  const keywords = listEntries().map((entry) => entry.keyword);
+  const keywords = listEntries()
+    .map((entry) => entry.keyword)
+    .filter((entryKeyword) => entryKeyword !== keyword);
   const isAlphabetical = keywords.every(
     (entryKeyword, index) =>
       index === 0 || compareKeywords(keywords[index - 1], entryKeyword) < 0,
   );
 
-  addCustomForm.reset();
-  void save({
+  const saved = await save({
     customDestinations: [
       ...settings.customDestinations,
       { keyword, label, urlTemplate },
     ],
-    ...(isAlphabetical ? { order: [] } : {}),
+    // A hidden built-in with the same keyword must not hide the new one
+    hiddenKeywords: settings.hiddenKeywords.filter(
+      (hiddenKeyword) => hiddenKeyword !== keyword,
+    ),
+    order: isAlphabetical ? [] : [...keywords, keyword],
   });
+  if (saved) {
+    addCustomForm.reset();
+  }
 });
 
 async function init() {
   const [stored, response] = await Promise.all([
-    chrome.storage.sync.get(["hiddenKeywords", "customDestinations", "order"]),
+    loadSettings(),
     chrome.runtime.sendMessage({ type: "listDestinations" }),
   ]);
-  settings = {
-    hiddenKeywords: stored.hiddenKeywords ?? [],
-    customDestinations: stored.customDestinations ?? [],
-    order: stored.order ?? [],
-  };
+  settings = stored;
   builtIns = response?.destinations ?? [];
   render();
 }

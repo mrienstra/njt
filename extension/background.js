@@ -26,7 +26,7 @@ chrome.omnibox.setDefaultSuggestion({ description: hint });
 
 // Stands out when skimming. Non-breaking spaces widen the gap around the frog,
 // because Firefox may collapse regular ones
-const gap = " ".repeat(4);
+const gap = "\u00A0".repeat(4);
 const moreSeparator = `${gap}🐸${gap}`;
 
 /**
@@ -136,10 +136,13 @@ function buildSuggestions(
     return undefined;
   }
 
-  const [entered, ...builtIns] = parseSuggestResponse(suggestResponse);
-  if (!entered) {
-    return undefined;
-  }
+  const [enteredFromServer, ...builtIns] =
+    parseSuggestResponse(suggestResponse);
+  // No response from /suggest (e.g. offline): Enter still goes to /jump
+  const entered = enteredFromServer ?? {
+    completion: [packageName, destination].filter(Boolean).join(" "),
+    description: "njt (suggestions unavailable)",
+  };
 
   const enteredCustom = findCustomDestination(destination, settings);
   const enteredRow = enteredCustom
@@ -212,7 +215,9 @@ function buildSuggestions(
 function resolveUrl(text, settings) {
   const { packageName, destination } = parseInput(text);
   const custom = findCustomDestination(destination, settings);
-  if (custom && packageName) {
+  // Only web pages, even if storage was changed by something other than the
+  // options page (which already checks this)
+  if (custom && packageName && /^https?:\/\//.test(custom.urlTemplate)) {
     return custom.urlTemplate.replaceAll("{package}", packageName);
   }
 
@@ -240,7 +245,13 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
 
   try {
     const [suggestResponse, settings] = await Promise.all([
-      fetchSuggestResponse(text, request.signal),
+      // Without /suggest, custom destinations can still be suggested
+      fetchSuggestResponse(text, request.signal).catch((error) => {
+        if (error?.name === "AbortError") {
+          throw error;
+        }
+        return [];
+      }),
       getSettings(),
     ]);
     const suggestions = buildSuggestions(text, suggestResponse, settings);
