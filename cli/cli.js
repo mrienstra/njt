@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 
 import chalk from "chalk";
-import { program } from "commander";
+import { Option, program } from "commander";
 
-import { generateUrl, getPackageVersion, openUrl } from "./main.js";
+import {
+  generateUrl,
+  generateZshCompletionScript,
+  getPackageVersion,
+  openUrl,
+  printDestinationCompletions,
+} from "./main.js";
 
 const green = chalk.green;
 const code = chalk.dim;
@@ -16,6 +22,9 @@ program
   .name("njt")
   .arguments("[package] [destination]")
   .usage("<package> [destination]")
+  .option("--completion <shell>", "print a tab completion script (zsh)")
+  // Used by the completion script
+  .addOption(new Option("--complete-destination <package>").hideHelp())
   .description(
     // prettier-ignore
     // eslint-disable-next-line unicorn/no-useless-template-literals -- A template literal keeps the multi-line banner readable
@@ -71,6 +80,26 @@ When you specify . instead of a package name, njt takes the name from the neares
 `,
   )
   .parse(process.argv);
+
+const { completion, completeDestination } = program.opts();
+
+if (completion !== undefined) {
+  if (completion !== "zsh") {
+    log(
+      chalk.red(
+        `Tab completion is not available for ${completion} yet, only for zsh.`,
+      ),
+    );
+    process.exit(1);
+  }
+  log(generateZshCompletionScript());
+  process.exit(0);
+}
+
+if (completeDestination !== undefined) {
+  await printDestinationCompletions(completeDestination, log);
+  process.exit(0);
+}
 
 if (!program.args[0]) {
   log(program.help());
