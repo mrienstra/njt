@@ -85,7 +85,7 @@ To reinstall or upgrade, run `npm install --global njt` again.
 **Pro tip 💡** When you specify `.` instead of a package name, `njt` takes the name from the nearest `package.json` file.
 
 **Pro tip 💡** In zsh, press Tab after a package name to list destinations, e.g. `njt prettier <Tab>`.
-To enable this, add the following line to `~/.zshrc`:
+To enable this, add the following line to `~/.zshrc`, after `compinit` has run (with Oh My Zsh: after `source $ZSH/oh-my-zsh.sh`):
 
 ```zsh
 eval "$(njt --completion zsh)"
